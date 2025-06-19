@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>摩斯密码表白器</title>
+    <title>摩斯密码发报器</title>
     <script src="https://cdn.tailwindcss.com"></script>
     <link href="https://cdn.jsdelivr.net/npm/font-awesome@4.7.0/css/font-awesome.min.css" rel="stylesheet">
     <script>
@@ -73,6 +73,13 @@
                 transform: scale(1.1);
                 background-color: rgba(255, 51, 102, 0.9);
             }
+            .title-animation {
+                animation: titlePulse 3s infinite;
+            }
+            .mobile-tap-hint {
+                opacity: 0;
+                animation: fadeInOut 3s infinite;
+            }
         }
 
         @keyframes floatHeart {
@@ -90,11 +97,33 @@
                 transform: translateX(100px) rotate(360deg);
             }
         }
+        
+        @keyframes titlePulse {
+            0%, 100% {
+                text-shadow: 0 0 10px rgba(255, 107, 139, 0.5);
+            }
+            50% {
+                text-shadow: 0 0 20px rgba(255, 51, 102, 0.8);
+            }
+        }
+        
+        @keyframes fadeInOut {
+            0%, 100% { opacity: 0; }
+            50% { opacity: 0.8; }
+        }
     </style>
 </head>
 <body class="bg-gradient-to-br from-light to-secondary min-h-screen flex flex-col items-center justify-center p-4 font-sans">
     <div class="max-w-md w-full mx-auto text-center relative overflow-hidden">
-        <h1 class="text-[clamp(2rem,5vw,3rem)] font-bold text-primary mb-8">摩斯密码表白器</h1>
+        <h1 class="text-[clamp(2rem,5vw,3.5rem)] font-bold text-accent mb-8 title-animation" aria-label="摩斯密码表白器">
+            <span class="inline-block">摩</span>
+            <span class="inline-block">斯</span>
+            <span class="inline-block">密</span>
+            <span class="inline-block">码</span>
+            <span class="inline-block ml-2">发</span>
+            <span class="inline-block">报</span>
+            <span class="inline-block">器</span>
+        </h1>
         
         <div class="mb-8">
             <input type="text" id="messageInput" 
@@ -102,8 +131,11 @@
                 placeholder="请输入演绎内容">
             <button id="convertBtn" 
                 class="mt-4 px-6 py-3 bg-primary text-white rounded-full hover:bg-primary/90 transition-all transform hover:scale-105 focus:outline-none">
-                开始表白
+                开始发报
             </button>
+            <p class="text-xs text-dark/60 mt-2 mobile-tap-hint hidden md:block">
+                <i class="fa fa-hand-pointer-o"></i> 点击按钮开始，手机端需点击两次以激活声音
+            </p>
         </div>
         
         <div id="heartContainer" class="py-12 my-8 flex justify-center">
@@ -125,6 +157,17 @@
         <div id="heartDisplay" class="mt-8 opacity-0 transition-opacity duration-500">
             <p class="text-dark/70 mb-2">摩斯密码翻译：</p>
             <p id="morseTranslation" class="text-lg font-medium text-primary"></p>
+        </div>
+        
+        <!-- 移动端声音激活提示 -->
+        <div id="mobileAudioHint" class="fixed inset-0 bg-dark/80 flex items-center justify-center z-50 hidden">
+            <div class="bg-white p-6 rounded-xl max-w-md w-full mx-4 text-center">
+                <h3 class="text-xl font-bold text-primary mb-4">激活声音</h3>
+                <p class="mb-6 text-dark">请点击下方按钮激活声音播放</p>
+                <button id="activateAudioBtn" class="px-6 py-3 bg-primary text-white rounded-full hover:bg-primary/90 transition-all">
+                    激活声音
+                </button>
+            </div>
         </div>
     </div>
     
@@ -148,6 +191,8 @@
         let soundEnabled = true;
         let audioContext;
         let audioInitialized = false;
+        let isMobile = /Mobi|Android|iPhone/i.test(navigator.userAgent);
+        let firstInteraction = false;
         
         // 初始化音频上下文
         function initAudio() {
@@ -163,17 +208,54 @@
                 if (audioContext.state === 'suspended') {
                     audioContext.resume().then(() => {
                         console.log('音频上下文已恢复');
+                        audioInitialized = true;
+                        if (isMobile) {
+                            document.getElementById('mobileAudioHint').classList.add('hidden');
+                        }
                     }).catch(e => {
                         console.error('无法恢复音频上下文:', e);
+                        soundEnabled = false;
+                        document.getElementById('soundToggle').innerHTML = '<i class="fa fa-volume-off"></i>';
                     });
+                } else {
+                    audioInitialized = true;
                 }
                 
-                audioInitialized = true;
+                // 在初始化时播放一个简短的无声音频
+                if (isMobile && !firstInteraction) {
+                    const buffer = audioContext.createBuffer(1, 1, 22050);
+                    const source = audioContext.createBufferSource();
+                    source.buffer = buffer;
+                    source.connect(audioContext.destination);
+                    source.start(0);
+                    firstInteraction = true;
+                }
             } catch (e) {
                 console.error('音频初始化失败:', e);
                 soundEnabled = false;
                 document.getElementById('soundToggle').innerHTML = '<i class="fa fa-volume-off"></i>';
             }
+        }
+        
+        // 移动端音频激活
+        function activateMobileAudio() {
+            if (!isMobile || audioInitialized) return;
+            
+            document.getElementById('mobileAudioHint').classList.remove('hidden');
+            
+            document.getElementById('activateAudioBtn').addEventListener('click', function() {
+                initAudio();
+                
+                // 播放一个简短的测试音
+                const testSound = document.getElementById('dotSound');
+                testSound.currentTime = 0;
+                testSound.play().catch(e => console.log('测试音频播放失败:', e));
+                
+                // 延迟显示主界面，确保音频已激活
+                setTimeout(() => {
+                    document.getElementById('mobileAudioHint').classList.add('hidden');
+                }, 500);
+            });
         }
         
         // 切换音效开关
@@ -201,6 +283,14 @@
             
             try {
                 const sound = type === '.' ? dotSound : dashSound;
+                
+                // 移动端需要特殊处理
+                if (isMobile && !audioInitialized) {
+                    initAudio();
+                    // 首次点击可能无法播放，记录为已交互
+                    firstInteraction = true;
+                    return;
+                }
                 
                 // 重置音频并播放
                 sound.currentTime = 0;
@@ -400,7 +490,17 @@
             }
             
             // 初始化音频（如果尚未初始化）
-            initAudio();
+            if (!audioInitialized) {
+                initAudio();
+                
+                // 移动端需要额外的交互来激活音频
+                if (isMobile && !firstInteraction) {
+                    firstInteraction = true;
+                    // 显示提示，让用户再次点击
+                    alert('点击确定后再次点击"开始表白"按钮以激活声音');
+                    return;
+                }
+            }
             
             // 转换为摩斯密码
             const morseCode = textToMorse(message);
@@ -426,6 +526,13 @@
                 document.getElementById('convertBtn').click();
             }
         });
+
+        // 检测设备类型并显示提示
+        if (isMobile) {
+            document.querySelector('.mobile-tap-hint').classList.remove('hidden');
+            // 移动端需要额外的音频激活步骤
+            activateMobileAudio();
+        }
     </script>
 </body>
 </html>    
